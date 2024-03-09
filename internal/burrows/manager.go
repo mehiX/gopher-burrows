@@ -2,13 +2,17 @@ package burrows
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"log/slog"
+	"os"
 	"time"
 )
 
 // tact is used for testing in order to make the time go faster. Normally it should be set to 1 minute.
-var tact = 3 * time.Second
+var Tact = time.Minute
 
 type Report struct {
 	TotalDepth    float64
@@ -17,6 +21,19 @@ type Report struct {
 	VolumeMinName string
 	VolumeMax     float64
 	VolumeMaxName string
+}
+
+func (r Report) ToTxt(w io.Writer) error {
+
+	txt := `TotalDepth	%.3f	
+NumAvailable	%d	
+VolumeMinName	%s	
+VolumeMaxName	%s	
+`
+
+	_, err := fmt.Fprintf(w, txt, r.TotalDepth, r.NumAvailable, r.VolumeMinName, r.VolumeMaxName)
+
+	return err
 }
 
 type Manager interface {
@@ -64,9 +81,7 @@ func (m *manager) manage(ctx context.Context) {
 		case <-ctx.Done():
 			m.lg.Info("received closing signal", "service", "manager")
 			// Save data if needed
-			for _, b := range m.burrows {
-				b.requests <- Request{name: ReqClose}
-			}
+			m.closeBurrowsAndDumpStatus()
 			return
 		case b := <-m.incoming:
 			managedBurrow := NewManagedBurrow(m.lg, b)
@@ -85,7 +100,27 @@ func (m *manager) manage(ctx context.Context) {
 			}()
 		}
 	}
+}
 
+func (m *manager) closeBurrowsAndDumpStatus() {
+	resp := make(chan Response, 2)
+	for _, b := range m.burrows {
+		// send me your current status and close
+		b.requests <- Request{name: ReqClose, response: resp}
+	}
+	var all []Burrow
+	for range len(m.burrows) {
+		r := <-resp
+		all = append(all, r.burrow)
+	}
+	fpath, err := os.CreateTemp(".", "dump_*.json")
+	if err != nil {
+		m.lg.Error("dump file not created", "error", err.Error())
+	} else {
+		if err = json.NewEncoder(fpath).Encode(all); err == nil {
+			m.lg.Info("generated dump file", "path", fpath.Name())
+		}
+	}
 }
 
 // Load reads data from the incoming channel and stores it in the internal structure of the manager.

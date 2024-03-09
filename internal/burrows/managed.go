@@ -27,7 +27,7 @@ func (mb *managedBurrow) start(b Burrow) {
 
 	burrow := b
 
-	pulse := time.NewTicker(tact)
+	pulse := time.NewTicker(Tact)
 	defer pulse.Stop()
 
 	for {
@@ -38,6 +38,7 @@ func (mb *managedBurrow) start(b Burrow) {
 			switch req.name {
 			case ReqClose:
 				mb.lg.Info("close burrow", "name", burrow.Name)
+				req.response <- Response{burrow: burrow}
 				return
 			case ReqStatus:
 				req.response <- Response{burrow: burrow, nextRequest: nil}

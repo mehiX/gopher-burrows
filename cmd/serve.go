@@ -5,11 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"text/tabwriter"
 	"time"
 
 	"github.com/mehix/gopher-burrows/internal/burrows"
@@ -17,6 +20,7 @@ import (
 )
 
 var (
+	logger        *slog.Logger
 	addr          string
 	fPath         string
 	verbose       bool
@@ -33,13 +37,12 @@ var cmdServe = &cobra.Command{
 		if verbose {
 			logLevel = slog.LevelDebug
 		}
-		logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel}))
+		logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel}))
 
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 		defer stop()
 
 		errs := make(chan error, 1)
-		defer close(errs)
 
 		// Create manager and load data
 		manager := burrows.NewManager(ctx, logger)
@@ -80,6 +83,8 @@ var cmdServe = &cobra.Command{
 		}
 
 		_ = srvr.Shutdown(context.Background())
+
+		<-manager.Done
 	},
 }
 
@@ -90,6 +95,8 @@ func init() {
 
 	cmdServe.Flags().StringVar(&reportingDir, "repos-dir", "/tmp", "path to write out reports")
 	cmdServe.Flags().DurationVar(&reportingFreq, "repos-freq", 10*time.Minute, "frequency for writing out reports")
+
+	cmdServe.Flags().DurationVarP(&burrows.Tact, "tact", "t", time.Minute, "change the speed with which the data is generated")
 }
 
 func loadInitialData(ctx context.Context, burrowsStream chan<- burrows.Burrow, errs chan<- error) {
@@ -113,11 +120,37 @@ func loadInitialData(ctx context.Context, burrowsStream chan<- burrows.Burrow, e
 		case burrowsStream <- b:
 		}
 	}
-
 }
 
 func generatePeriodicReports(ctx context.Context, manager burrows.Manager, errs chan<- error) {
 
+	tkr := time.NewTicker(reportingFreq)
+	defer tkr.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tkr.C:
+			fpath := filepath.Join(reportingDir, fmt.Sprintf("%s_%s.txt", "burrows", time.Now().Format("20060102_150405")))
+			report := manager.Report()
+
+			f, err := os.OpenFile(fpath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0664)
+			if err != nil {
+				errs <- err
+				return
+			}
+			defer f.Close()
+
+			w := tabwriter.NewWriter(f, 15, 0, 0, ' ', tabwriter.AlignRight)
+			defer w.Flush()
+
+			if err := report.ToTxt(f); err == nil {
+				logger.Info("report generated", "filename", fpath)
+			}
+
+		}
+	}
 }
 
 func httpHandler(manager burrows.Manager) http.Handler {
