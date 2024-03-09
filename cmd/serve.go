@@ -5,8 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"log"
 	"log/slog"
 	"net"
 	"net/http"
@@ -19,8 +17,9 @@ import (
 )
 
 var (
-	addr  string
-	fPath string
+	addr    string
+	fPath   string
+	verbose bool
 )
 
 var cmdServe = &cobra.Command{
@@ -28,18 +27,25 @@ var cmdServe = &cobra.Command{
 	Short: "Expose and http server",
 	Run: func(cmd *cobra.Command, args []string) {
 
+		logLevel := slog.LevelInfo
+		if verbose {
+			logLevel = slog.LevelDebug
+		}
+		logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel}))
+
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 		defer stop()
 
 		errs := make(chan error, 1)
 
-		manager := startManager(ctx)
+		manager := burrows.NewManager(ctx, logger)
+
 		burrowsStream := make(chan burrows.Burrow)
 
 		go func() {
 			manager.Load(burrowsStream)
 
-			fmt.Println(manager.CurrentStatus())
+			logger.Debug("manager data loaded", "data", manager.CurrentStatus())
 		}()
 
 		go func() {
@@ -74,14 +80,14 @@ var cmdServe = &cobra.Command{
 		}
 
 		go func() {
-			fmt.Printf("Listening on %s...\n", srvr.Addr)
+			logger.Info("http server started", "addr", srvr.Addr)
 			errs <- srvr.ListenAndServe()
 		}()
 
 		select {
 		case err := <-errs:
 			if err != nil && errors.Is(err, http.ErrServerClosed) {
-				log.Fatal(err)
+				logger.Error(err.Error())
 			}
 		case <-ctx.Done():
 			stop()
@@ -94,14 +100,8 @@ var cmdServe = &cobra.Command{
 func init() {
 	cmdServe.Flags().StringVar(&addr, "addr", "127.0.0.1:8080", "HTTP address to listen on")
 	cmdServe.Flags().StringVar(&fPath, "path", "data/initial.json", "Load initial burrows data")
-}
+	cmdServe.Flags().BoolVarP(&verbose, "verbose", "v", false, "enable more verbose logging")
 
-func startManager(ctx context.Context) burrows.Manager {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-
-	mngr := burrows.NewManager(ctx, logger)
-
-	return mngr
 }
 
 func httpHandler(manager burrows.Manager) http.Handler {

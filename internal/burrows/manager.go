@@ -54,6 +54,7 @@ func NewManager(ctx context.Context, logger *slog.Logger) *manager {
 }
 
 func (m *manager) manage(ctx context.Context) {
+	m.lg.Debug("start manage")
 
 	defer close(m.Done)
 
