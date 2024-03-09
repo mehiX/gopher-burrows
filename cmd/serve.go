@@ -17,9 +17,11 @@ import (
 )
 
 var (
-	addr    string
-	fPath   string
-	verbose bool
+	addr          string
+	fPath         string
+	verbose       bool
+	reportingDir  string
+	reportingFreq time.Duration
 )
 
 var cmdServe = &cobra.Command{
@@ -37,7 +39,9 @@ var cmdServe = &cobra.Command{
 		defer stop()
 
 		errs := make(chan error, 1)
+		defer close(errs)
 
+		// Create manager and load data
 		manager := burrows.NewManager(ctx, logger)
 
 		burrowsStream := make(chan burrows.Burrow)
@@ -48,29 +52,11 @@ var cmdServe = &cobra.Command{
 			logger.Debug("manager data loaded", "data", manager.CurrentStatus())
 		}()
 
-		go func() {
-			defer close(burrowsStream)
-			b, err := os.ReadFile(fPath)
-			if err != nil {
-				errs <- err
-				return
-			}
+		go loadInitialData(ctx, burrowsStream, errs)
 
-			var data []burrows.Burrow
-			if err := json.NewDecoder(bytes.NewReader(b)).Decode(&data); err != nil {
-				errs <- err
-				return
-			}
+		go generatePeriodicReports(ctx, manager, errs)
 
-			for _, b := range data {
-				select {
-				case <-ctx.Done():
-					return
-				case burrowsStream <- b:
-				}
-			}
-		}()
-
+		// Create the HTTP server
 		srvr := &http.Server{
 			Addr:         addr,
 			BaseContext:  func(_ net.Listener) context.Context { return ctx },
@@ -101,6 +87,36 @@ func init() {
 	cmdServe.Flags().StringVar(&addr, "addr", "127.0.0.1:8080", "HTTP address to listen on")
 	cmdServe.Flags().StringVar(&fPath, "path", "data/initial.json", "Load initial burrows data")
 	cmdServe.Flags().BoolVarP(&verbose, "verbose", "v", false, "enable more verbose logging")
+
+	cmdServe.Flags().StringVar(&reportingDir, "repos-dir", "/tmp", "path to write out reports")
+	cmdServe.Flags().DurationVar(&reportingFreq, "repos-freq", 10*time.Minute, "frequency for writing out reports")
+}
+
+func loadInitialData(ctx context.Context, burrowsStream chan<- burrows.Burrow, errs chan<- error) {
+	defer close(burrowsStream)
+	b, err := os.ReadFile(fPath)
+	if err != nil {
+		errs <- err
+		return
+	}
+
+	var data []burrows.Burrow
+	if err := json.NewDecoder(bytes.NewReader(b)).Decode(&data); err != nil {
+		errs <- err
+		return
+	}
+
+	for _, b := range data {
+		select {
+		case <-ctx.Done():
+			return
+		case burrowsStream <- b:
+		}
+	}
+
+}
+
+func generatePeriodicReports(ctx context.Context, manager burrows.Manager, errs chan<- error) {
 
 }
 
