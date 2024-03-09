@@ -61,7 +61,7 @@
 				
 				<option value="file2">github.com/mehix/gopher-burrows/internal/burrows/managed.go (0.0%)</option>
 				
-				<option value="file3">github.com/mehix/gopher-burrows/internal/burrows/manager.go (3.9%)</option>
+				<option value="file3">github.com/mehix/gopher-burrows/internal/burrows/manager.go (3.5%)</option>
 				
 				<option value="file4">github.com/mehix/gopher-burrows/internal/http/handlers.go (86.4%)</option>
 				
@@ -215,6 +215,7 @@ func (mb *managedBurrow) start(b Burrow) <span class="cov0" title="0">{
                                 if burrow.IsAvailable() </span><span class="cov0" title="0">{
                                         receiveGopher := make(chan Request)
                                         // send without blocking
+                                        mb.lg.Debug("let the manager know we are available", "name", b.Name)
                                         select </span>{
                                         case req.response &lt;- Response{burrow: burrow, nextRequest: receiveGopher}:<span class="cov0" title="0">
                                                 // available so waiting for a new gopher
@@ -399,28 +400,40 @@ func (m *manager) Rentout(ctx context.Context) (Burrow, error) <span class="cov0
 
         m.lg.Info("start rentout request")
 
-        // ask who is available
         req := NewAvailableRequest()
 
-        m.lg.Debug("send available request to all burrows")
+        // first prepare to receive responses
+        respB, respErrs := make(chan Burrow, 1), make(chan error, 1)
+        go func() </span><span class="cov0" title="0">{
+                select </span>{
+                case &lt;-ctx.Done():<span class="cov0" title="0">
+                        m.lg.Debug("context expired before burrows responded to Available request")
+                        respB &lt;- Burrow{}
+                        respErrs &lt;- errors.New("no burrow available")</span>
+                case resp := &lt;-req.response:<span class="cov0" title="0">
+                        m.lg.Debug("available burrow", "name", resp.burrow.Name)
+                        gReq := NewGopherRequest()
+                        resp.nextRequest &lt;- gReq
+
+                        select </span>{
+                        case &lt;-ctx.Done():<span class="cov0" title="0">
+                                m.lg.Debug("available burrow did not respond in time")
+                                respB &lt;- Burrow{}
+                                respErrs &lt;- errors.New("available burrow did not respond in time")</span>
+                        case resp := &lt;-gReq.response:<span class="cov0" title="0">
+                                respB &lt;- resp.burrow
+                                respErrs &lt;- nil</span>
+                        }
+                }
+        }()
+
+        // ask who is available
+        <span class="cov0" title="0">m.lg.Debug("send available request to all burrows")
         for mb := range m.stream() </span><span class="cov0" title="0">{
                 go func() </span><span class="cov0" title="0">{ mb.requests &lt;- req }</span>()
         }
 
-        <span class="cov0" title="0">select </span>{
-        case &lt;-ctx.Done():<span class="cov0" title="0">
-                return Burrow{}, errors.New("no burrow available")</span>
-        case resp := &lt;-req.response:<span class="cov0" title="0">
-                gReq := NewGopherRequest()
-                resp.nextRequest &lt;- gReq
-
-                select </span>{
-                case &lt;-ctx.Done():<span class="cov0" title="0">
-                        return Burrow{}, errors.New("available burrow did not respond in time")</span>
-                case resp := &lt;-gReq.response:<span class="cov0" title="0">
-                        return resp.burrow, nil</span>
-                }
-        }
+        <span class="cov0" title="0">return &lt;-respB, &lt;-respErrs</span>
 }
 
 func (m *manager) Report() Report <span class="cov0" title="0">{

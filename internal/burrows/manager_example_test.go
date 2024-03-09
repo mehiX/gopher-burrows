@@ -5,7 +5,7 @@ import (
 	"text/tabwriter"
 )
 
-func ExampleReport_ToTxt() {
+func ExampleReport_Write() {
 
 	r := Report{
 		TotalDepth:    10.23434,
