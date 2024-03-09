@@ -52,7 +52,9 @@ func Run() {
 		go func() {
 			for {
 				time.Sleep(time.Duration(rand.Int63n(5)) * time.Second)
-				b, err := manager.Rentout()
+				t, cancel := context.WithTimeout(ctx, 2*time.Second)
+				defer cancel()
+				b, err := manager.Rentout(t)
 				if err != nil {
 					log.Println("rentingout", err)
 				} else {

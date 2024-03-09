@@ -131,7 +131,10 @@ func rentBurrow(manager burrows.Manager) http.HandlerFunc {
 		Error  string
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
-		b, err := manager.Rentout()
+		allowedTime, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+
+		b, err := manager.Rentout(allowedTime)
 
 		w.Header().Set("Content-type", "application/json")
 		if err != nil {

@@ -22,7 +22,7 @@ type Report struct {
 type Manager interface {
 	Load(<-chan Burrow)
 	CurrentStatus() []Burrow
-	Rentout() (Burrow, error)
+	Rentout(ctx context.Context) (Burrow, error)
 	Report() Report
 }
 
@@ -42,6 +42,7 @@ type manager struct {
 }
 
 // NewManager creates a new burrows manager.
+// It starts a go routine that manages the lifecycle of the manager
 func NewManager(ctx context.Context, logger *slog.Logger) *manager {
 	m := &manager{
 		lg:       logger,
@@ -87,25 +88,22 @@ func (m *manager) manage(ctx context.Context) {
 
 }
 
+// Load reads data from the incoming channel and stores it in the internal structure of the manager.
+// It is safe to call `Load` in a separate go routine
 func (m *manager) Load(in <-chan Burrow) {
 	for b := range in {
 		m.incoming <- b
 	}
 }
 
-func (m *manager) List() <-chan managedBurrow {
-	all := make(chan managedBurrow)
-	m.list <- all
-	return all
-}
-
+// CurrentStatus returns a list of all the burrows currently managed.
 func (m *manager) CurrentStatus() []Burrow {
 
 	ch := make(chan Response)
 
 	req := NewStatusRequest(ch)
 	count := 0
-	for mb := range m.List() {
+	for mb := range m.stream() {
 		count++
 		go func() { mb.requests <- req }()
 	}
@@ -119,7 +117,11 @@ func (m *manager) CurrentStatus() []Burrow {
 	return burrows
 }
 
-func (m *manager) Rentout() (Burrow, error) {
+// Rentout picks the first available burrow and assigns it to a gopher by returning it to the caller.
+// If no available burrow can be found then an error is returned.
+// The passed in context can control how long the renting process can last. It returns an error if
+// the context expires before a burrow could be rented out.
+func (m *manager) Rentout(ctx context.Context) (Burrow, error) {
 
 	m.lg.Info("start rentout request")
 
@@ -127,22 +129,19 @@ func (m *manager) Rentout() (Burrow, error) {
 	req := NewAvailableRequest()
 
 	m.lg.Debug("send available request to all burrows")
-	for mb := range m.List() {
+	for mb := range m.stream() {
 		go func() { mb.requests <- req }()
 	}
 
 	select {
-	case <-time.After(2 * time.Second):
+	case <-ctx.Done():
 		return Burrow{}, errors.New("no burrow available")
 	case resp := <-req.response:
 		gReq := NewGopherRequest()
 		resp.nextRequest <- gReq
 
-		waitForResponse := time.NewTimer(time.Second)
-		defer waitForResponse.Stop()
-
 		select {
-		case <-waitForResponse.C:
+		case <-ctx.Done():
 			return Burrow{}, errors.New("available burrow did not respond in time")
 		case resp := <-gReq.response:
 			return resp.burrow, nil
@@ -176,4 +175,13 @@ func (m *manager) Report() Report {
 	}
 
 	return rep
+}
+
+// stream returns a channel where it sends all the burrows that
+// the manager manages at the moment.
+// It is thread safe and meant to be used internally to expose data to other go routines.
+func (m *manager) stream() <-chan managedBurrow {
+	all := make(chan managedBurrow)
+	m.list <- all
+	return all
 }
