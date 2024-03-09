@@ -17,7 +17,7 @@ func ExampleReport_ToTxt() {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 15, 0, 0, '.', tabwriter.AlignRight|tabwriter.Debug)
-	r.ToTxt(w)
+	r.Write(w)
 	w.Flush()
 
 	// output:

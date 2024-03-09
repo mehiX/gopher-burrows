@@ -145,7 +145,7 @@ func generatePeriodicReports(ctx context.Context, manager burrows.Manager, errs 
 			w := tabwriter.NewWriter(f, 15, 0, 0, ' ', tabwriter.AlignRight)
 			defer w.Flush()
 
-			if err := report.ToTxt(f); err == nil {
+			if err := report.Write(f); err == nil {
 				logger.Info("report generated", "filename", fpath)
 			}
 

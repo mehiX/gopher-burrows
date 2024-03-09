@@ -23,7 +23,7 @@ type Report struct {
 	VolumeMaxName string
 }
 
-func (r Report) ToTxt(w io.Writer) error {
+func (r Report) Write(w io.Writer) error {
 
 	txt := `TotalDepth	%.3f	
 NumAvailable	%d	

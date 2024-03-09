@@ -9,6 +9,6 @@ var cmdRoot = &cobra.Command{
 }
 
 func Execute() error {
-	cmdRoot.AddCommand(cmdServe)
+	cmdRoot.AddCommand(cmdServe, cmdVersion)
 	return cmdRoot.Execute()
 }
