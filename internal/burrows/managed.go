@@ -46,6 +46,7 @@ func (mb *managedBurrow) start(b Burrow) {
 				if burrow.IsAvailable() {
 					receiveGopher := make(chan Request)
 					// send without blocking
+					mb.lg.Debug("let the manager know we are available", "name", b.Name)
 					select {
 					case req.response <- Response{burrow: burrow, nextRequest: receiveGopher}:
 						// available so waiting for a new gopher

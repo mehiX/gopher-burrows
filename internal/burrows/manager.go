@@ -160,28 +160,40 @@ func (m *manager) Rentout(ctx context.Context) (Burrow, error) {
 
 	m.lg.Info("start rentout request")
 
-	// ask who is available
 	req := NewAvailableRequest()
 
+	// first prepare to receive responses
+	respB, respErrs := make(chan Burrow, 1), make(chan error, 1)
+	go func() {
+		select {
+		case <-ctx.Done():
+			m.lg.Debug("context expired before burrows responded to Available request")
+			respB <- Burrow{}
+			respErrs <- errors.New("no burrow available")
+		case resp := <-req.response:
+			m.lg.Debug("available burrow", "name", resp.burrow.Name)
+			gReq := NewGopherRequest()
+			resp.nextRequest <- gReq
+
+			select {
+			case <-ctx.Done():
+				m.lg.Debug("available burrow did not respond in time")
+				respB <- Burrow{}
+				respErrs <- errors.New("available burrow did not respond in time")
+			case resp := <-gReq.response:
+				respB <- resp.burrow
+				respErrs <- nil
+			}
+		}
+	}()
+
+	// ask who is available
 	m.lg.Debug("send available request to all burrows")
 	for mb := range m.stream() {
 		go func() { mb.requests <- req }()
 	}
 
-	select {
-	case <-ctx.Done():
-		return Burrow{}, errors.New("no burrow available")
-	case resp := <-req.response:
-		gReq := NewGopherRequest()
-		resp.nextRequest <- gReq
-
-		select {
-		case <-ctx.Done():
-			return Burrow{}, errors.New("available burrow did not respond in time")
-		case resp := <-gReq.response:
-			return resp.burrow, nil
-		}
-	}
+	return <-respB, <-respErrs
 }
 
 func (m *manager) Report() Report {
