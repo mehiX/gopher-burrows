@@ -67,3 +67,13 @@ github.com/mehix/gopher-burrows/internal/burrows/manager.go:206.3,206.26 1 0
 github.com/mehix/gopher-burrows/internal/burrows/manager.go:206.26,209.4 2 0
 github.com/mehix/gopher-burrows/internal/burrows/manager.go:212.2,212.12 1 0
 github.com/mehix/gopher-burrows/internal/burrows/manager.go:218.49,222.2 3 0
+github.com/mehix/gopher-burrows/internal/http/handlers.go:12.52,15.77 2 1
+github.com/mehix/gopher-burrows/internal/http/handlers.go:15.77,15.102 1 0
+github.com/mehix/gopher-burrows/internal/http/handlers.go:16.2,18.12 3 1
+github.com/mehix/gopher-burrows/internal/http/handlers.go:21.59,22.54 1 1
+github.com/mehix/gopher-burrows/internal/http/handlers.go:22.54,26.60 3 1
+github.com/mehix/gopher-burrows/internal/http/handlers.go:26.60,29.4 2 0
+github.com/mehix/gopher-burrows/internal/http/handlers.go:33.59,38.54 2 1
+github.com/mehix/gopher-burrows/internal/http/handlers.go:38.54,45.17 5 1
+github.com/mehix/gopher-burrows/internal/http/handlers.go:45.17,48.4 2 1
+github.com/mehix/gopher-burrows/internal/http/handlers.go:50.3,50.53 1 1

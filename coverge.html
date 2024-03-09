@@ -63,6 +63,8 @@
 				
 				<option value="file3">github.com/mehix/gopher-burrows/internal/burrows/manager.go (3.9%)</option>
 				
+				<option value="file4">github.com/mehix/gopher-burrows/internal/http/handlers.go (86.4%)</option>
+				
 				</select>
 			</div>
 			<div id="legend">
@@ -260,7 +262,7 @@ type Report struct {
         VolumeMaxName string
 }
 
-func (r Report) ToTxt(w io.Writer) error <span class="cov8" title="1">{
+func (r Report) Write(w io.Writer) error <span class="cov8" title="1">{
 
         txt := `TotalDepth        %.3f        
 NumAvailable        %d        
@@ -457,6 +459,60 @@ func (m *manager) stream() &lt;-chan managedBurrow <span class="cov0" title="0">
         m.list &lt;- all
         return all
 }</span>
+</pre>
+		
+		<pre class="file" id="file4" style="display: none">package http
+
+import (
+        "context"
+        "encoding/json"
+        "net/http"
+        "time"
+
+        "github.com/mehix/gopher-burrows/internal/burrows"
+)
+
+func Handler(manager burrows.Manager) http.Handler <span class="cov8" title="1">{
+        mux := http.NewServeMux()
+
+        mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) </span><span class="cov0" title="0">{ w.Write([]byte("OK")) }</span>)
+        <span class="cov8" title="1">mux.HandleFunc("GET /", showStatus(manager))
+        mux.HandleFunc("POST /rent", rentBurrow(manager))
+        return mux</span>
+}
+
+func showStatus(manager burrows.Manager) http.HandlerFunc <span class="cov8" title="1">{
+        return func(w http.ResponseWriter, r *http.Request) </span><span class="cov8" title="1">{
+                burrows := manager.CurrentStatus()
+
+                w.Header().Set("Content-type", "application/json")
+                if err := json.NewEncoder(w).Encode(burrows); err != nil </span><span class="cov0" title="0">{
+                        http.Error(w, err.Error(), http.StatusInternalServerError)
+                        return
+                }</span>
+        }
+}
+
+func rentBurrow(manager burrows.Manager) http.HandlerFunc <span class="cov8" title="1">{
+        type Response struct {
+                Burrow burrows.Burrow
+                Error  string
+        }
+        return func(w http.ResponseWriter, r *http.Request) </span><span class="cov8" title="1">{
+                allowedTime, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+                defer cancel()
+
+                b, err := manager.Rentout(allowedTime)
+
+                w.Header().Set("Content-type", "application/json")
+                if err != nil </span><span class="cov8" title="1">{
+                        _ = json.NewEncoder(w).Encode(Response{Error: err.Error()})
+                        return
+                }</span>
+
+                <span class="cov8" title="1">_ = json.NewEncoder(w).Encode(Response{Burrow: b})</span>
+        }
+}
 </pre>
 		
 		</div>
