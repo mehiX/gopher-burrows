@@ -34,7 +34,7 @@ func NewStatusRequest(resp chan Response) Request {
 func NewAvailableRequest() Request {
 	return Request{
 		name:     ReqAvailable,
-		response: make(chan Response),
+		response: make(chan Response, 1), // we are only interested in the first available burrow, the rest of the responses are discarded.
 	}
 }
 

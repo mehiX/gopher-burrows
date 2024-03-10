@@ -36,7 +36,7 @@ func rentBurrow(manager burrows.Manager) http.HandlerFunc {
 		Error  string
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
-		allowedTime, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		allowedTime, cancel := context.WithTimeout(r.Context(), time.Second)
 		defer cancel()
 
 		b, err := manager.Rentout(allowedTime)
