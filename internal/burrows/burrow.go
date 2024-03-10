@@ -24,6 +24,8 @@ func (b *Burrow) Volume() float64 {
 	return b.Depth * math.Pi * math.Pow(b.Width, 2) / 4
 }
 
+// IncrementAge advances the by 1 minute.
+// If the burrow is occupied it also updates the depth. It handles "negative" depths as well.
 func (b *Burrow) IncrementAge() {
 	if b.AgeInMin+1 > maxAgeInMin {
 		return
@@ -34,7 +36,7 @@ func (b *Burrow) IncrementAge() {
 		if b.Depth == 0.0 {
 			b.Depth = 0.009
 		} else {
-			b.Depth += b.Depth * 0.009
+			b.Depth += math.Abs(b.Depth) * 0.009
 		}
 	}
 }
